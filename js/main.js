@@ -2,7 +2,7 @@ import { createRound, step, TICK_HZ, NO_INPUT, makeRng, CHARACTERS, CHARACTER_ID
 import { createBot, botInput } from "./bot.js";
 import { createRenderer, CHAR_COLORS, colorsFor } from "./render.js";
 import { keyboardInput, consumePress, clearPresses, connectedPads, padInput, padStartPressed, mergeInputs, simulatePress } from "./input.js";
-import { initTouchControls, isTouchDevice, touchInput, setTouchControlsVisible, setSpecialInfo } from "./touch.js";
+import { initTouchControls, isTouchDevice, touchInput, setTouchControlsVisible, setSpecialInfo, isIOS, isStandalone, goFullscreen } from "./touch.js";
 import * as sfx from "./audio.js";
 import { loadPolicy } from "./ai/policy.js";
 import { createAgent, agentStep } from "./ai/agent.js";
@@ -320,7 +320,9 @@ function MODE_MENU() {
 }
 
 function fullscreenButton() {
-  const can = TOUCH && document.documentElement.requestFullscreen && !document.fullscreenElement;
+  if (!TOUCH || isStandalone()) return "";
+  if (isIOS()) return `<div class="install-hint">Fullscreen on iPhone: Share ⎋ → <b>Add to Home Screen</b>, then open it from there</div>`;
+  const can = document.documentElement.requestFullscreen && !document.fullscreenElement;
   return can ? `<button class="fs" data-act="fullscreen">⛶ Fullscreen</button>` : "";
 }
 
@@ -386,6 +388,8 @@ function showOverlay(kind) {
 overlayEl.addEventListener("click", (e) => {
   const el = e.target.closest("[data-key],[data-pick],[data-act]");
   if (!el || el.disabled) return;
+  // on phones, starting a mode is a user gesture: use it to go fullscreen (where allowed)
+  if (TOUCH && /^Digit[1-5]$/.test(el.dataset.key ?? "")) goFullscreen();
   if (el.dataset.key) simulatePress(el.dataset.key);
   else if (el.dataset.pick !== undefined && phase === "select") {
     picks[0] = Number(el.dataset.pick);
@@ -393,7 +397,7 @@ overlayEl.addEventListener("click", (e) => {
     sfx.playPickup();
     showOverlay("select");
   } else if (el.dataset.act === "fullscreen") {
-    document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.("landscape")).catch(() => {});
+    goFullscreen();
     el.remove();
   }
 });

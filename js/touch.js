@@ -133,5 +133,47 @@ export function initTouchControls() {
 
   // no long-press menus / text selection on the controls
   root.addEventListener("contextmenu", (e) => e.preventDefault());
+  // the controls never scroll/zoom the page (pointer events still fire)
+  root.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+  root.addEventListener("touchend", (e) => e.preventDefault(), { passive: false });
   window.addEventListener("blur", releaseAll);
+  blockZoom();
+}
+
+// iOS Safari ignores user-scalable=no, so block zoom gestures by hand:
+// a second tap within 350ms (double-tap zoom), double-click, and pinch.
+function blockZoom() {
+  let lastEnd = 0;
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      if (e.timeStamp - lastEnd < 350) e.preventDefault();
+      lastEnd = e.timeStamp;
+    },
+    { passive: false },
+  );
+  document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+  for (const t of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+  }
+  document.addEventListener("touchmove", (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+}
+
+export function isIOS() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+export function isStandalone() {
+  return matchMedia("(display-mode: fullscreen)").matches || matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+
+// Fullscreen + landscape lock where the browser allows it (Android Chrome; not iPhone Safari).
+export function goFullscreen() {
+  const el = document.documentElement;
+  if (!el.requestFullscreen || document.fullscreenElement) return;
+  el.requestFullscreen({ navigationUI: "hide" })
+    .then(() => screen.orientation?.lock?.("landscape"))
+    .catch(() => {});
 }
