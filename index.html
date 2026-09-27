@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#07060d" />
     <title>Blastfall</title>
     <style>
       html,
@@ -13,6 +17,12 @@
         color: #e8e4ff;
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
         overflow: hidden;
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
       }
       body {
         display: grid;
@@ -26,8 +36,9 @@
         image-rendering: pixelated;
       }
       #overlay {
-        position: absolute;
+        position: fixed;
         inset: 0;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -53,8 +64,52 @@
       }
       .menu {
         display: grid;
-        gap: 8px;
-        font-size: 18px;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+        font-size: 17px;
+      }
+      .menu.one {
+        grid-template-columns: 1fr;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .menu button {
+        padding: 8px 14px;
+        border: 1px solid #3a3358;
+        border-radius: 6px;
+        background: #15112499;
+        text-align: left;
+      }
+      .menu button:hover:not(:disabled) {
+        border-color: #ffcf6b;
+      }
+      .menu button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .menu button.small {
+        font-size: 14px;
+      }
+      .ai-info {
+        font-size: 12px;
+      }
+      button.fs,
+      button.link {
+        border: 1px solid #5a5280;
+        border-radius: 6px;
+        background: none;
+        padding: 6px 12px;
+        color: #c9c3e6;
+      }
+      button.link {
+        padding: 2px 8px;
+      }
+      body.touch kbd {
+        display: none;
       }
       .controls {
         display: grid;
@@ -75,6 +130,9 @@
         justify-content: center;
       }
       .card {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
         width: 190px;
         padding: 12px;
         border: 2px solid #2d2745;
@@ -139,9 +197,199 @@
         background: #1a1628;
         font-size: 0.9em;
       }
+      /* ---------- phones ---------- */
+      #pauseBtn {
+        position: fixed;
+        top: calc(6px + env(safe-area-inset-top));
+        left: calc(6px + env(safe-area-inset-left));
+        width: 40px;
+        height: 34px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.35);
+        color: #fff;
+        font-size: 12px;
+        z-index: 5;
+        opacity: 0.7;
+      }
+      #pauseBtn[hidden] {
+        display: none;
+      }
+      #touch {
+        position: fixed;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+      }
+      #touch[hidden] {
+        display: none;
+      }
+      .stick-zone {
+        position: absolute;
+        left: 0;
+        top: 40px;
+        bottom: 0;
+        width: 50%;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      .stick-base {
+        position: absolute;
+        left: 90px;
+        bottom: 70px;
+        top: auto;
+        width: 110px;
+        height: 110px;
+        margin: -55px 0 0 -55px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.05);
+        opacity: 0.55;
+      }
+      .stick-base.active {
+        bottom: auto;
+        opacity: 1;
+      }
+      .stick-knob {
+        position: absolute;
+        left: 30px;
+        top: 30px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.25);
+        border: 2px solid rgba(255, 255, 255, 0.4);
+      }
+      .tbtn {
+        position: absolute;
+        pointer-events: auto;
+        touch-action: none;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        display: grid;
+        place-items: center;
+        padding: 0;
+      }
+      .tbtn.pressed {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(0.94);
+      }
+      .tbtn.jump {
+        width: 82px;
+        height: 82px;
+        right: calc(18px + env(safe-area-inset-right));
+        bottom: 22px;
+      }
+      .tbtn.fire {
+        width: 76px;
+        height: 76px;
+        right: calc(112px + env(safe-area-inset-right));
+        bottom: 42px;
+        border-color: rgba(255, 180, 90, 0.6);
+        color: #ffcf6b;
+      }
+      .tbtn.special {
+        width: 62px;
+        height: 62px;
+        right: calc(34px + env(safe-area-inset-right));
+        bottom: 118px;
+        font-size: 10px;
+        /* cooldown: the dark wedge shrinks as it recharges */
+        background: conic-gradient(rgba(0, 0, 0, 0.55) var(--cd, 0deg), rgba(125, 255, 207, 0.12) 0);
+        border-color: rgba(125, 255, 207, 0.4);
+      }
+      .tbtn.special.ready {
+        border-color: #7dffcf;
+        color: #7dffcf;
+        box-shadow: 0 0 12px rgba(125, 255, 207, 0.4);
+      }
+      #rotate {
+        display: none;
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate {
+          position: fixed;
+          inset: 0;
+          z-index: 10;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          background: #07060d;
+          color: #ffcf6b;
+          font-size: 18px;
+        }
+        #rotate div {
+          font-size: 56px;
+          animation: spin 2s ease-in-out infinite;
+        }
+      }
+      @keyframes spin {
+        50% {
+          transform: rotate(90deg);
+        }
+      }
+      /* short landscape screens: compact menus */
+      @media (max-height: 520px) {
+        #overlay {
+          gap: 8px;
+          padding: 8px calc(12px + env(safe-area-inset-right)) 8px calc(12px + env(safe-area-inset-left));
+          justify-content: safe center;
+        }
+        h1 {
+          font-size: 34px;
+        }
+        h2 {
+          font-size: 18px;
+        }
+        .sub {
+          display: none;
+        }
+        .menu {
+          font-size: 15px;
+          gap: 6px 10px;
+        }
+        .menu button {
+          padding: 7px 12px;
+        }
+        .menu button.small {
+          font-size: 13px;
+        }
+        .controls {
+          font-size: 11px;
+        }
+        .cards {
+          gap: 8px;
+          flex-wrap: nowrap;
+        }
+        .card {
+          width: auto;
+          flex: 1 1 0;
+          max-width: 210px;
+          padding: 8px;
+        }
+        .swatch {
+          height: 28px;
+          margin-bottom: 4px;
+        }
+        .cname {
+          font-size: 16px;
+        }
+        .blurb {
+          font-size: 10px;
+        }
+      }
     </style>
   </head>
   <body>
+    <div id="rotate"><div>⟳</div>Turn your phone sideways</div>
+    <button id="pauseBtn" hidden aria-label="Pause">❚❚</button>
     <div id="wrap">
       <canvas id="game"></canvas>
       <div id="overlay" hidden></div>

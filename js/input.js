@@ -31,6 +31,11 @@ export function consumePress(code) {
   return had;
 }
 
+// Menus call this so a tap/click behaves exactly like pressing that key.
+export function simulatePress(code) {
+  pressedOnce.add(code);
+}
+
 export function clearPresses() {
   pressedOnce.clear();
 }

@@ -1,7 +1,8 @@
 import { createRound, step, TICK_HZ, NO_INPUT, makeRng, CHARACTERS, CHARACTER_IDS } from "./sim.js";
 import { createBot, botInput } from "./bot.js";
 import { createRenderer, CHAR_COLORS, colorsFor } from "./render.js";
-import { keyboardInput, consumePress, clearPresses, connectedPads, padInput, padStartPressed, mergeInputs } from "./input.js";
+import { keyboardInput, consumePress, clearPresses, connectedPads, padInput, padStartPressed, mergeInputs, simulatePress } from "./input.js";
+import { initTouchControls, isTouchDevice, touchInput, setTouchControlsVisible, setSpecialInfo } from "./touch.js";
 import * as sfx from "./audio.js";
 import { loadPolicy } from "./ai/policy.js";
 import { createAgent, agentStep } from "./ai/agent.js";
@@ -41,6 +42,8 @@ const BLURBS = {
 const canvas = document.getElementById("game");
 const overlayEl = document.getElementById("overlay");
 const renderer = createRenderer(canvas);
+const TOUCH = isTouchDevice();
+if (TOUCH) document.body.classList.add("touch");
 
 let level = "normal";
 let mode = null; // "cpu" | "2p" | "watch" | "ai" | "aiwatch"
@@ -173,7 +176,7 @@ function selectTick() {
 
 function gatherInputs() {
   const pads = connectedPads();
-  const kb = keyboardInput();
+  const kb = mergeInputs(keyboardInput(), touchInput());
   const inputs = [NO_INPUT, NO_INPUT];
   if (mode === "cpu" || mode === "ai") {
     inputs[0] = mergeInputs(kb, pads[0] ? padInput(pads[0]) : null);
@@ -305,31 +308,42 @@ function bannerFor() {
 function MODE_MENU() {
   return `
   <div class="menu">
-    <div><kbd>1</kbd> / <kbd>Enter</kbd> You vs CPU</div>
-    <div><kbd>2</kbd> Two players <span class="dim">(P2 needs a gamepad)</span></div>
-    <div><kbd>3</kbd> Watch CPU vs CPU</div>
-    <div><kbd>Tab</kbd> CPU level: <b>${level.toUpperCase()}</b></div>
-    <div style="margin-top:6px"><kbd>4</kbd> You vs trained AI · <kbd>5</kbd> Watch AI vs AI</div>
-    <div class="dim" style="font-size:12px">AI: ${aiInfo}</div>
-  </div>`;
+    <button data-key="Digit1"><kbd>1</kbd> You vs CPU</button>
+    <button data-key="Digit4" ${aiPolicy ? "" : "disabled"}><kbd>4</kbd> You vs trained AI</button>
+    <button data-key="Tab" class="small"><kbd>Tab</kbd> CPU level: <b>${level.toUpperCase()}</b></button>
+    <button data-key="Digit5" class="small" ${aiPolicy ? "" : "disabled"}><kbd>5</kbd> Watch AI vs AI</button>
+    <button data-key="Digit3" class="small"><kbd>3</kbd> Watch CPU vs CPU</button>
+    <button data-key="Digit2" class="small"><kbd>2</kbd> Two players <span class="dim">(P2: gamepad)</span></button>
+  </div>
+  <div class="dim ai-info">AI: ${aiInfo}</div>
+  ${fullscreenButton()}`;
+}
+
+function fullscreenButton() {
+  const can = TOUCH && document.documentElement.requestFullscreen && !document.fullscreenElement;
+  return can ? `<button class="fs" data-act="fullscreen">⛶ Fullscreen</button>` : "";
 }
 
 function showOverlay(kind) {
   overlayEl.hidden = false;
   if (kind === "title") {
+    const help = TOUCH
+      ? `<div class="controls">
+          <div><b>Left thumb</b> anywhere on the left half: move &amp; aim (8 directions)</div>
+          <div><b>JUMP</b> double jump in the air, wall-jump, climb off ledges · <b>FIRE</b> hold to keep firing · <b>special</b> depends on your fighter</div>
+        </div>`
+      : `<div class="controls">
+          <div><b>Move / aim</b> Arrows or WASD (hold a direction while firing; diagonals work)</div>
+          <div><b>Jump</b> Z · Space · K &nbsp; <span class="dim">(double jump in the air, wall-jump, climb off ledges)</span></div>
+          <div><b>Fire</b> X · J &nbsp; <span class="dim">(missiles fall once the motor burns out; aim down + fire to rocket-jump)</span></div>
+          <div><b>Special</b> C · L · Shift &nbsp; <span class="dim">(depends on your character)</span></div>
+          <div><b>Wall slide / ledge hang</b> hold toward a wall or ledge while falling; Down to let go · <b>Pause</b> Esc</div>
+        </div>`;
     overlayEl.innerHTML = `
       <h1>BLASTFALL</h1>
-      <p class="sub">missile duel · prototype</p>
+      <p class="sub">missile duel</p>
       ${MODE_MENU()}
-      <div class="controls">
-        <div><b>Move / aim</b> Arrows or WASD (hold a direction while firing; diagonals work)</div>
-        <div><b>Jump</b> Z · Space · K &nbsp; <span class="dim">(double jump in the air, wall-jump, climb off ledges)</span></div>
-        <div><b>Fire</b> X · J &nbsp; <span class="dim">(missiles fall once the motor burns out; aim down + fire to rocket-jump)</span></div>
-        <div><b>Special</b> C · L · Shift &nbsp; <span class="dim">(depends on your character)</span></div>
-        <div><b>Wall slide / ledge hang</b> hold toward a wall or ledge while falling; Down to let go</div>
-        <div><b>Pause</b> Esc</div>
-      </div>
-      <p class="dim">Power-ups: <span style="color:#ff4d6d">● blast radius</span> · <span style="color:#ffd23f">» missile speed</span> · <span style="color:#b36bff">✚ damage</span>. First to ${WINS_NEEDED} rounds.</p>`;
+      ${help}`;
   } else if (kind === "select") {
     const cards = CHARACTER_IDS.map((id, i) => {
       const ch = CHARACTERS[id];
@@ -340,20 +354,25 @@ function showOverlay(kind) {
         .join("");
       const active = [0, 1].some((p) => picks[p] === i && !(solo() && p === 1));
       return `
-        <div class="card ${active ? "active" : ""}" style="--c:${c.body};--d:${c.dark}">
+        <button class="card ${active ? "active" : ""}" data-pick="${i}" style="--c:${c.body};--d:${c.dark}">
           <div class="tags">${tags}</div>
           <div class="swatch"></div>
           <div class="cname">${ch.name}</div>
           <div class="special">${ch.specialName} · ${(ch.cooldown / TICK_HZ).toFixed(0)}s</div>
           <div class="blurb">${BLURBS[id]}</div>
-        </div>`;
+        </button>`;
     }).join("");
+    const hint = TOUCH
+      ? `Tap a fighter to pick it · <button class="link" data-key="Escape">back</button>`
+      : `<kbd>←</kbd><kbd>→</kbd> choose · <kbd>Enter</kbd>/<kbd>Z</kbd> lock in (or click)${mode === "2p" ? " · P2: d-pad + A" : ""} · <kbd>Esc</kbd> back`;
     overlayEl.innerHTML = `
       <h2>CHOOSE YOUR FIGHTER</h2>
       <div class="cards">${cards}</div>
-      <p class="dim"><kbd>←</kbd><kbd>→</kbd> choose · <kbd>Enter</kbd>/<kbd>Z</kbd> lock in${mode === "2p" ? " · P2: d-pad + A" : ""} · <kbd>Esc</kbd> back</p>`;
+      <p class="dim">${hint}</p>`;
   } else if (kind === "paused") {
-    overlayEl.innerHTML = `<h1>PAUSED</h1><div class="menu"><div><kbd>Esc</kbd> resume</div><div><kbd>Q</kbd> quit to title</div></div>`;
+    overlayEl.innerHTML = `<h1>PAUSED</h1><div class="menu one">
+      <button data-key="Escape"><kbd>Esc</kbd> Resume</button>
+      <button data-key="KeyQ"><kbd>Q</kbd> Quit to title</button></div>`;
   } else if (kind === "matchEnd") {
     const w = score[0] > score[1] ? 0 : 1;
     overlayEl.innerHTML = `
@@ -363,9 +382,30 @@ function showOverlay(kind) {
   }
 }
 
+// Menus are tappable/clickable: buttons either replay a key press or pick a fighter.
+overlayEl.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-key],[data-pick],[data-act]");
+  if (!el || el.disabled) return;
+  if (el.dataset.key) simulatePress(el.dataset.key);
+  else if (el.dataset.pick !== undefined && phase === "select") {
+    picks[0] = Number(el.dataset.pick);
+    locked[0] = true;
+    sfx.playPickup();
+    showOverlay("select");
+  } else if (el.dataset.act === "fullscreen") {
+    document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.("landscape")).catch(() => {});
+    el.remove();
+  }
+});
+
 function hideOverlay() {
   overlayEl.hidden = true;
 }
+
+initTouchControls();
+const pauseBtn = document.getElementById("pauseBtn");
+pauseBtn.addEventListener("click", () => simulatePress("Escape"));
+const HUD_SPECIAL = { dash: "DASH", shield: "SHIELD", cannon: "CANNON" };
 
 window.addEventListener("keydown", sfx.unlockAudio);
 window.addEventListener("pointerdown", sfx.unlockAudio);
@@ -380,6 +420,14 @@ function frame(now) {
   while (acc >= DT) {
     tick();
     acc -= DT;
+  }
+  const inPlay = phase === "countdown" || phase === "playing" || phase === "roundEnd";
+  const humanP1 = mode === "cpu" || mode === "ai" || mode === "2p";
+  setTouchControlsVisible(inPlay && humanP1);
+  pauseBtn.hidden = !(TOUCH && inPlay);
+  if (inPlay && humanP1) {
+    const me = state.players[0];
+    setSpecialInfo(HUD_SPECIAL[CHARACTERS[me.char].special], me.specialCooldown / CHARACTERS[me.char].cooldown);
   }
   renderer.update(dt, state);
   renderer.draw(state, { names, score, ...bannerFor() });

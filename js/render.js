@@ -40,17 +40,20 @@ export function createRenderer(canvas) {
   const col = (id) => colorsFor(cur, id);
 
   function resize() {
-    const s = Math.max(1, Math.floor(Math.min(window.innerWidth / WIDTH, (window.innerHeight - 8) / HEIGHT)));
+    // crisp integer scaling on big screens; fill the screen (fractional) on phones
+    const fit = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
+    const s = fit >= 2 ? Math.floor(fit) : fit;
     const dpr = window.devicePixelRatio || 1;
     scale = s;
-    canvas.style.width = `${WIDTH * s}px`;
-    canvas.style.height = `${HEIGHT * s}px`;
-    canvas.width = WIDTH * s * dpr;
-    canvas.height = HEIGHT * s * dpr;
+    canvas.style.width = `${Math.floor(WIDTH * s)}px`;
+    canvas.style.height = `${Math.floor(HEIGHT * s)}px`;
+    canvas.width = Math.round(WIDTH * s * dpr);
+    canvas.height = Math.round(HEIGHT * s * dpr);
     ctx.imageSmoothingEnabled = false;
   }
   resize();
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", () => setTimeout(resize, 200));
 
   function spawn(p) {
     if (fx.particles.length < 900) fx.particles.push(p);
