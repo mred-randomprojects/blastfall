@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blastfall</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #07060d;
+        color: #e8e4ff;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        overflow: hidden;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      #wrap {
+        position: relative;
+      }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+      }
+      #overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: rgba(7, 6, 13, 0.82);
+        text-align: center;
+        padding: 16px;
+      }
+      #overlay[hidden] {
+        display: none;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(32px, 6vw, 72px);
+        letter-spacing: 0.12em;
+        color: #ffcf6b;
+        text-shadow: 0 0 24px rgba(255, 138, 61, 0.6);
+      }
+      .sub {
+        margin: 0;
+        color: #9a93b8;
+      }
+      .menu {
+        display: grid;
+        gap: 8px;
+        font-size: 18px;
+      }
+      .controls {
+        display: grid;
+        gap: 4px;
+        font-size: 13px;
+        color: #c9c3e6;
+        text-align: left;
+      }
+      h2 {
+        margin: 0;
+        letter-spacing: 0.12em;
+        color: #ffcf6b;
+      }
+      .cards {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .card {
+        width: 190px;
+        padding: 12px;
+        border: 2px solid #2d2745;
+        border-radius: 8px;
+        background: #120f1e;
+        text-align: left;
+        opacity: 0.7;
+        transition: transform 0.08s;
+      }
+      .card.active {
+        border-color: var(--c);
+        opacity: 1;
+        transform: translateY(-4px);
+        box-shadow: 0 0 24px color-mix(in srgb, var(--c) 40%, transparent);
+      }
+      .swatch {
+        height: 56px;
+        border-radius: 4px;
+        background: linear-gradient(135deg, var(--c), var(--d));
+        margin-bottom: 8px;
+      }
+      .cname {
+        font-size: 20px;
+        font-weight: bold;
+        color: var(--c);
+      }
+      .special {
+        font-size: 12px;
+        color: #fff;
+        margin: 2px 0 6px;
+      }
+      .blurb {
+        font-size: 11px;
+        color: #a9a3c6;
+        line-height: 1.4;
+      }
+      .tags {
+        height: 18px;
+        display: flex;
+        gap: 4px;
+      }
+      .tag {
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: var(--c);
+        color: #07060d;
+        font-weight: bold;
+      }
+      .tag.locked {
+        outline: 2px solid #fff;
+      }
+      .dim {
+        color: #7b7499;
+      }
+      kbd {
+        display: inline-block;
+        padding: 1px 7px;
+        border: 1px solid #5a5280;
+        border-bottom-width: 3px;
+        border-radius: 4px;
+        background: #1a1628;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <canvas id="game"></canvas>
+      <div id="overlay" hidden></div>
+    </div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

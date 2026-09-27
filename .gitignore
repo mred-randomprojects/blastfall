@@ -1,0 +1,18 @@
+.DS_Store
+node_modules/
+__pycache__/
+.claude/
+
+# Training outputs stay local; only a few published generations are committed.
+models/*/*
+!models/v1/latest.json
+!models/v1/gen_0010.json
+!models/v1/gen_0050.json
+!models/v1/gen_0100.json
+!models/v1/gen_0150.json
+!models/v1/gen_0200.json
+!models/v1/gen_0300.json
+!models/v1/gen_0400.json
+!models/v1/gen_0500.json
+!models/v1/gen_0650.json
+!models/v1/gen_0800.json
