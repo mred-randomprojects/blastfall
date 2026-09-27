@@ -9,7 +9,7 @@ import { createAgent, agentStep } from "./ai/agent.js";
 
 // Trained model the "vs AI" modes use: models/<run>/latest.json (override with ?run=name&gen=gen_0100)
 const params = new URLSearchParams(location.search);
-const AI_RUN = params.get("run") ?? "v1";
+const AI_RUN = params.get("run") ?? "v2";
 const AI_FILE = params.get("gen") ?? "latest";
 let aiPolicy = null;
 let aiInfo = "loading…";

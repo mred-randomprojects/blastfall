@@ -148,6 +148,12 @@ def main():
     ap.add_argument("--damage-shaping", type=float, default=0.3)
     ap.add_argument("--draw-reward", type=float, default=-0.5)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--init", help="start from another run's checkpoint.pt (fine-tuning)")
+    ap.add_argument("--seed-pool", help="also use this run dir's generations as opponents")
+    ap.add_argument("--mix-self", type=float, default=0.5)
+    ap.add_argument("--mix-pool", type=float, default=0.3)
+    ap.add_argument("--mix-dummy", type=float, default=0.0, help="share of games vs idle/wandering dummies")
+    ap.add_argument("--random-spawn", type=float, default=0.0, help="share of games starting at random spots")
     args = ap.parse_args()
 
     torch.set_num_threads(8)
@@ -166,10 +172,17 @@ def main():
         opt.load_state_dict(ck["opt"])
         start_iter, total_decisions = ck["iter"], ck["decisions"]
         print(f"resumed at iter {start_iter}")
+    elif args.init:
+        ck = torch.load(args.init)
+        net.load_state_dict(ck["net"])
+        opt.load_state_dict(ck["opt"])
+        start_iter, total_decisions = ck["iter"], ck["decisions"]
+        print(f"initialised from {args.init} (iter {start_iter})")
 
-    pool = sorted(
-        os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.startswith("gen_") and f.endswith(".json")
-    )
+    def gens(d):
+        return sorted(os.path.join(d, f) for f in os.listdir(d) if f.startswith("gen_") and f.endswith(".json"))
+
+    pool = (gens(args.seed_pool) if args.seed_pool else []) + gens(out_dir)
     row = rollouts.obs_size + len(rollouts.heads) + 6
     log = open(os.path.join(out_dir, "log.jsonl"), "a")
 
@@ -187,7 +200,12 @@ def main():
                     "decisions": args.decisions,
                     "seed": it,
                     "outDir": tmp_dir,
-                    "mix": {"self": 0.5, "pool": 0.3 if pool else 0.0},
+                    "mix": {
+                        "self": args.mix_self,
+                        "pool": args.mix_pool if pool else 0.0,
+                        "dummy": args.mix_dummy,
+                        "randomSpawn": args.random_spawn,
+                    },
                     "reward": {
                         "timeBonus": args.time_bonus,
                         "damageShaping": args.damage_shaping,
@@ -248,6 +266,7 @@ def main():
 
             st = res["stats"]
             selfplay = st.get("self", {})
+            idle = st.get("dummy", {}).get("idle", {})
             entry = {
                 "iter": it,
                 "decisions": total_decisions,
@@ -260,6 +279,8 @@ def main():
                 "vs_normal_bot": winrate(st["bot"]["normal"]),
                 "vs_hard_bot": winrate(st["bot"]["hard"]),
                 "vs_pool": winrate(st["pool"]),
+                "idle_dummy_kill_s": round(idle["ticks"] / idle["n"] / 60, 1) if idle.get("n") else None,
+                "idle_dummy_winrate": round(idle["w"] / idle["n"], 3) if idle.get("n") else None,
                 "shots_per_round": round(st["shots"] / st["episodes"], 1),
                 "specials_per_round": round(st["specials"] / st["episodes"], 2),
                 "mean_reward_per_decision": round(float(rew.mean()), 4),
@@ -275,6 +296,7 @@ def main():
             print(
                 f"it {it:4d} | {total_decisions/1e6:6.2f}M dec | round {entry['avg_round_s']:4.1f}s "
                 f"| vs normal {fmt(entry['vs_normal_bot'])} hard {fmt(entry['vs_hard_bot'])} pool {fmt(entry['vs_pool'])} "
+                f"| idle dummy {entry['idle_dummy_kill_s'] or '-'}s "
                 f"| shots {entry['shots_per_round']:4.1f} spec {entry['specials_per_round']:4.2f} "
                 f"| ent {entry['entropy']:.2f} kl {entry['kl']:.4f} | {entry['rollout_s']}s+{entry['update_s']}s",
                 flush=True,

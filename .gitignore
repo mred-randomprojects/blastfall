@@ -16,3 +16,6 @@ models/*/*
 !models/v1/gen_0500.json
 !models/v1/gen_0650.json
 !models/v1/gen_0800.json
+!models/v2/latest.json
+!models/v2/gen_1000.json
+!models/v2/gen_1200.json

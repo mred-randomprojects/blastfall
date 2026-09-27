@@ -25,6 +25,13 @@ Reward: win = +1 plus up to +0.5 for winning fast (scaled by time left), loss = 
 
 Opponents during training: 50% itself, 30% past generations (so it doesn't forget), 20% the scripted bots.
 
+Run **v2** (what the game plays) fine-tunes v1 with two additions, after v1 turned out to be slow at killing a player who just stands still somewhere it had never seen one: 15% of games are against **dummies** (idle, or wandering without shooting) and half of all games start from **random spots** on the map. Killing an idle player anywhere on the map went from 31s (and 13% losses) to 11s (no losses); vs the Hard CPU 88% → 91%.
+
+```
+python3 train/ppo.py --run v2 --init models/v1/checkpoint.pt --seed-pool models/v1 --iters 400 \
+  --mix-self 0.4 --mix-pool 0.25 --mix-dummy 0.15 --random-spawn 0.5
+```
+
 ```
 python3 train/ppo.py --run v1 --iters 400          # train (≈1s per iteration of 100k decisions)
 python3 train/ppo.py --run v1 --iters 400 --resume # keep going

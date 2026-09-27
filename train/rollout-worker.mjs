@@ -6,7 +6,7 @@
 
 import { parentPort } from "node:worker_threads";
 import { readFileSync, writeFileSync } from "node:fs";
-import { createRound, step, makeRng, T, CHARACTER_IDS } from "../js/sim.js";
+import { createRound, step, makeRng, T, TILE, MAP, NO_INPUT, CHARACTER_IDS } from "../js/sim.js";
 import { createBot, botInput } from "../js/bot.js";
 import { OBS_SIZE, HEADS } from "../js/ai/obs.js";
 import { loadPolicy } from "../js/ai/policy.js";
@@ -23,6 +23,38 @@ function getPolicy(path) {
   return policyCache.get(path);
 }
 
+// Every tile you can stand on (empty, solid below): used for random spawns / dummy placement.
+const STAND_SPOTS = [];
+for (let r = 1; r < MAP.length - 1; r++) {
+  for (let c = 1; c < MAP[0].length - 1; c++) {
+    if (MAP[r][c] === "." && MAP[r + 1][c] === "#") STAND_SPOTS.push({ x: c * TILE + 3, y: (r + 1) * TILE - T.playerH });
+  }
+}
+
+function randomSpawns(state, rng) {
+  const [a, b] = state.players;
+  let s1;
+  let s2;
+  do {
+    s1 = STAND_SPOTS[Math.floor(rng() * STAND_SPOTS.length)];
+    s2 = STAND_SPOTS[Math.floor(rng() * STAND_SPOTS.length)];
+  } while (Math.hypot(s1.x - s2.x, s1.y - s2.y) < 120);
+  Object.assign(a, { x: s1.x, y: s1.y });
+  Object.assign(b, { x: s2.x, y: s2.y });
+}
+
+// Non-learning opponents that exist only to widen what the AI has seen:
+// "idle" never touches the controls; "wander" holds random moves/jumps, never fires.
+function dummyInput(d, rng) {
+  if (d.style === "idle") return NO_INPUT;
+  if (--d.timer <= 0) {
+    d.timer = 20 + Math.floor(rng() * 70);
+    const h = Math.floor(rng() * 3);
+    d.input = { ...NO_INPUT, left: h === 0, right: h === 2, jump: rng() < 0.35, down: rng() < 0.1 };
+  } else if (d.timer === 1) d.input = { ...d.input, jump: false };
+  return d.input;
+}
+
 function terminalReward(state, side, cfg) {
   if (state.winner === side) return 1 + cfg.timeBonus * (1 - state.tick / T.maxTicks);
   if (state.winner === -1) return cfg.drawReward;
@@ -34,10 +66,17 @@ function playEpisode(job, rng, episodeSeed) {
   const cfg = job.reward;
   const learner = getPolicy(job.weights);
   const r = rng();
-  const kind = r < job.mix.self ? "self" : r < job.mix.self + job.mix.pool && job.opponents.length ? "pool" : "bot";
+  const mix = { self: 0.5, pool: 0.3, dummy: 0, randomSpawn: 0, ...job.mix };
+  const kind =
+    r < mix.self ? "self"
+      : r < mix.self + mix.pool && job.opponents.length ? "pool"
+        : r < mix.self + mix.pool + mix.dummy ? "dummy"
+          : "bot";
   const learnerSide = rng() < 0.5 ? 0 : 1;
   const chars = [CHARACTER_IDS[Math.floor(rng() * 3)], CHARACTER_IDS[Math.floor(rng() * 3)]];
   const state = createRound(episodeSeed, chars);
+  const dummyStyle = rng() < 0.5 ? "idle" : "wander";
+  if (kind === "dummy" || rng() < mix.randomSpawn) randomSpawns(state, rng);
   const botLevel = rng() < 0.5 ? "normal" : "hard";
 
   const sides = [0, 1].map((id) => {
@@ -47,6 +86,7 @@ function playEpisode(job, rng, episodeSeed) {
       const opp = job.opponents[Math.floor(rng() * job.opponents.length)];
       return { id, learner: false, agent: createAgent(id, getPolicy(opp), rng) };
     }
+    if (kind === "dummy") return { id, learner: false, dummy: { style: dummyStyle, timer: 0, input: NO_INPUT } };
     return { id, learner: false, bot: createBot(id, rng, botLevel) };
   });
 
@@ -57,6 +97,10 @@ function playEpisode(job, rng, episodeSeed) {
     for (const s of sides) {
       if (s.bot) {
         inputs[s.id] = botInput(s.bot, state, events);
+        continue;
+      }
+      if (s.dummy) {
+        inputs[s.id] = dummyInput(s.dummy, rng);
         continue;
       }
       const { input, decided } = agentStep(s.agent, state, events);
@@ -92,7 +136,7 @@ function playEpisode(job, rng, episodeSeed) {
     s.open.done = 1;
     s.traj.push(s.open);
   }
-  return { kind, botLevel, learnerSide, state, sides, stats };
+  return { kind, botLevel, dummyStyle, learnerSide, state, sides, stats };
 }
 
 parentPort.on("message", (job) => {
@@ -103,6 +147,7 @@ parentPort.on("message", (job) => {
     episodes: 0, decisions: 0, ticks: 0, shots: 0, specials: 0,
     self: { n: 0, ticks: 0, draws: 0 },
     pool: { w: 0, l: 0, d: 0 },
+    dummy: { idle: { n: 0, w: 0, ticks: 0 }, wander: { n: 0, w: 0, ticks: 0 } },
     bot: { normal: { w: 0, l: 0, d: 0 }, hard: { w: 0, l: 0, d: 0 } },
   };
   let episodeSeed = job.seed * 1000;
@@ -118,6 +163,12 @@ parentPort.on("message", (job) => {
       st.self.ticks += ep.state.tick;
       if (ep.state.winner === -1) st.self.draws++;
     } else if (ep.kind === "pool") st.pool[res]++;
+    else if (ep.kind === "dummy") {
+      const dd = st.dummy[ep.dummyStyle];
+      dd.n++;
+      dd.ticks += ep.state.tick;
+      if (res === "w") dd.w++;
+    }
     else st.bot[ep.botLevel][res]++;
     for (const s of ep.sides) {
       if (!s.learner) continue;
