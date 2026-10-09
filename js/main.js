@@ -7,10 +7,17 @@ import * as sfx from "./audio.js";
 import { loadPolicy } from "./ai/policy.js";
 import { createAgent, agentStep } from "./ai/agent.js";
 
-// Trained model the "vs AI" modes use: models/<run>/latest.json (override with ?run=name&gen=gen_0100)
+// Trained model the "vs AI" modes use: models/<run>/latest.json (override with ?run=name&gen=gen_0100).
+// Only plain names get through: these values go into a fetch path and onto the page, and this page
+// shares its origin (storage, Firebase sessions) with every other mred-randomprojects app.
+const SAFE_PARAM = /^[A-Za-z0-9_-]+$/;
 const params = new URLSearchParams(location.search);
-const AI_RUN = params.get("run") ?? "v2";
-const AI_FILE = params.get("gen") ?? "latest";
+const pick = (key, fallback) => {
+  const v = params.get(key);
+  return v && SAFE_PARAM.test(v) ? v : fallback;
+};
+const AI_RUN = pick("run", "v2");
+const AI_FILE = pick("gen", "latest");
 let aiPolicy = null;
 let aiInfo = "loading…";
 async function loadAi() {
@@ -315,8 +322,13 @@ function MODE_MENU() {
     <button data-key="Digit3" class="small"><kbd>3</kbd> Watch CPU vs CPU</button>
     <button data-key="Digit2" class="small"><kbd>2</kbd> Two players <span class="dim">(P2: gamepad)</span></button>
   </div>
-  <div class="dim ai-info">AI: ${aiInfo}</div>
+  <div class="dim ai-info">AI: ${escapeHtml(aiInfo)}</div>
   ${fullscreenButton()}`;
+}
+
+function escapeHtml(text) {
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(text).replace(/[&<>"']/g, (c) => map[c]);
 }
 
 function fullscreenButton() {
