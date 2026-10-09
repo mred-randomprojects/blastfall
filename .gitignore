@@ -19,3 +19,10 @@ models/*/*
 !models/v2/latest.json
 !models/v2/gen_1000.json
 !models/v2/gen_1200.json
+
+.env
+.env.*
+!.env.example
+*.local
+*service-account*.json
+.claude/settings.local.json
