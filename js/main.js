@@ -18,17 +18,19 @@ const pick = (key, fallback) => {
 };
 const AI_RUN = pick("run", "v2");
 const AI_FILE = pick("gen", "latest");
+// Locally the trainer keeps rewriting latest.json, so skip the cache there; the live site uses the HTTP cache.
+const LOCAL_HOST = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 let aiPolicy = null;
 let aiInfo = "loading…";
 async function loadAi() {
   try {
-    const res = await fetch(`models/${AI_RUN}/${AI_FILE}.json?t=${Date.now()}`);
+    const res = await fetch(`models/${AI_RUN}/${AI_FILE}.json${LOCAL_HOST ? `?t=${Date.now()}` : ""}`);
     if (!res.ok) throw new Error(res.status);
     aiPolicy = loadPolicy(await res.json());
     aiInfo = `${AI_RUN} · iter ${aiPolicy.meta.iter} · ${(aiPolicy.meta.decisions / 1e6).toFixed(1)}M decisions`;
   } catch {
-    aiPolicy = null;
-    aiInfo = `no model at models/${AI_RUN}/${AI_FILE}.json yet`;
+    // A failed refetch (flaky connection) keeps the AI already loaded instead of leaving the opponent standing still.
+    if (!aiPolicy) aiInfo = `no model at models/${AI_RUN}/${AI_FILE}.json yet`;
   }
   if (phase === "title" || phase === "matchEnd") showOverlay(phase);
 }
