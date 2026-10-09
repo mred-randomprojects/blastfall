@@ -5,13 +5,15 @@
 // Weights JSON: { trunk: [{in, out, w: [out*in row-major], b: [out]}...],
 //                 pi: {in, out, w, b}, v: {in, out, w, b}, meta: {...} }
 
-import { HEADS, N_LOGITS } from "./obs.js";
+import { HEADS, N_LOGITS, OBS_SIZE } from "./obs.js";
 
 export function loadPolicy(json) {
   const layer = (l) => ({ in: l.in, out: l.out, w: Float32Array.from(l.w), b: Float32Array.from(l.b) });
   const trunk = json.trunk.map(layer);
   const pi = layer(json.pi);
   const v = layer(json.v);
+  // A size mismatch doesn't crash the forward pass, it plays on garbage (or NaN): refuse it instead.
+  if (trunk[0].in !== OBS_SIZE) throw new Error(`policy takes ${trunk[0].in} inputs, but obs.js builds ${OBS_SIZE}`);
   if (pi.out !== N_LOGITS) throw new Error(`policy has ${pi.out} logits, expected ${N_LOGITS}`);
   const bufs = trunk.map((l) => new Float32Array(l.out));
   return { trunk, pi, v, bufs, logits: new Float32Array(N_LOGITS), meta: json.meta ?? {} };
