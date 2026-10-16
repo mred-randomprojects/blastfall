@@ -3,7 +3,7 @@
 Bare-bones single-screen missile duel, built so an AI can later learn it by self-play.
 
 - Run: `npm run serve` → http://localhost:8431 (ES modules need a server, `file://` won't work)
-- Test: `npm test` on Node 22 (determinism, rounds always end, bot-vs-bot stats + sim speed, and the shipped AI: input size, arena symmetry, ≥ 75% vs the Hard CPU)
+- Test: `npm test` on Node 22 (determinism, rounds always end, bot-vs-bot stats + sim speed, gamepad start presses, and the shipped AI: input size, arena symmetry, ≥ 75% vs the Hard CPU)
 
 Layout:
 - `js/sim.js` — the whole game as a pure, deterministic, fixed-tick (60Hz) simulation. No DOM, no Math.random, no trig. This is what training will run headless.

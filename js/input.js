@@ -63,6 +63,23 @@ export function padStartPressed(pad) {
   return Boolean(pad.buttons[9]?.pressed || pad.buttons[0]?.pressed);
 }
 
+// Menus start on a pad's A or Start only when it goes down, like a key press: A is also jump, and one
+// still held when the match ends must not skip the result screen. Call it every tick, in every phase,
+// so a button held through play is already known as held. A pad not seen before counts as released:
+// browsers only expose a pad after a button press, and that first press is often the A that should start.
+export function createPadStartEdge() {
+  const wasDown = new Map(); // pad.index -> A/Start down at the last call
+  return (pads) => {
+    let pressed = false;
+    for (const pad of pads) {
+      const down = padStartPressed(pad);
+      if (down && !wasDown.get(pad.index)) pressed = true;
+      wasDown.set(pad.index, down);
+    }
+    return pressed;
+  };
+}
+
 export function mergeInputs(a, b) {
   if (!b) return a;
   return {

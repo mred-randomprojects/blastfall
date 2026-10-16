@@ -1,7 +1,7 @@
 import { createRound, step, TICK_HZ, NO_INPUT, makeRng, CHARACTERS, CHARACTER_IDS } from "./sim.js";
 import { createBot, botInput } from "./bot.js";
 import { createRenderer, CHAR_COLORS, colorsFor } from "./render.js";
-import { keyboardInput, consumePress, clearPresses, connectedPads, padInput, padStartPressed, mergeInputs, simulatePress } from "./input.js";
+import { keyboardInput, consumePress, clearPresses, connectedPads, padInput, createPadStartEdge, mergeInputs, simulatePress } from "./input.js";
 import { initTouchControls, isTouchDevice, touchInput, setTouchControlsVisible, setSpecialInfo, isIOS, isStandalone, goFullscreen } from "./touch.js";
 import * as sfx from "./audio.js";
 import { loadPolicy } from "./ai/policy.js";
@@ -72,6 +72,7 @@ let phaseTimer = 0;
 let hitstop = 0;
 let names = ["P1", "P2"];
 const padPrev = new Map();
+const padStartEdge = createPadStartEdge();
 
 showOverlay("title");
 
@@ -202,6 +203,9 @@ function gatherInputs() {
 }
 
 function tick() {
+  // Before any early return: the pads are polled in every phase, so A held from the last round doesn't
+  // count as a press on the result screen.
+  const padStart = padStartEdge(connectedPads());
   if (consumePress("Escape")) {
     if (phase === "paused") {
       phase = pausedFrom;
@@ -235,7 +239,7 @@ function tick() {
       showOverlay(phase);
       return;
     }
-    if (consumePress("Digit1") || consumePress("Enter") || connectedPads().some(padStartPressed)) chooseMode("cpu");
+    if (consumePress("Digit1") || consumePress("Enter") || padStart) chooseMode("cpu");
     else if (consumePress("Digit2")) chooseMode("2p");
     else if (consumePress("Digit3")) chooseMode("watch");
     else if (consumePress("Digit4") && aiPolicy) chooseMode("ai");
